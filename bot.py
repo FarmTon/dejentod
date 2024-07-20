@@ -40,7 +40,8 @@ class DejenTod:
         }
 
     def http(self, url, headers, data=None):
-        while True:
+        retry_count = 0
+        while retry_count < 5:
             try:
                 now = datetime.now().isoformat(" ").split(".")[0]
                 if data is None:
@@ -54,10 +55,15 @@ class DejenTod:
                 return res
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 self.log(f"{merah}Connection error or timeout! Exception: {e}")
+                retry_count += 1
                 time.sleep(5)  # Increased delay to handle persistent network issues
             except Exception as e:
                 self.log(f"{merah}Unexpected error occurred: {e}")
+                retry_count += 1
                 time.sleep(5)  # Increased delay for unexpected errors
+
+        self.log(f"{merah}Failed to complete HTTP request after 5 attempts")
+        return None
 
     def log(self, msg):
         now = datetime.now().isoformat(" ").split(".")[0]
@@ -118,7 +124,7 @@ class DejenTod:
         url = "https://api.djdog.io/telegram/login?" + data
         self.remove_authorization()
         res = self.http(url, self.headers)
-        if res.status_code != 200:
+        if res is None or res.status_code != 200:
             self.log(f"{merah}Failed to fetch token, check http.log!")
             return None
         try:
@@ -154,14 +160,14 @@ class DejenTod:
 
         while True:
             res = self.http(info_url, self.headers)
-            if res.status_code != 200:
+            if res is None or res.status_code != 200:
                 self.log(f"{merah}Failed to get account information!")
                 return False
 
             adopted = res.json()["data"]["adopted"]
             if not adopted:
                 res = self.http(adop_url, self.headers, "")
-                if res.status_code != 200:
+                if res is None or res.status_code != 200:
                     self.log(f"{merah}Failed to adopt dog!")
                     return False
                 self.log(f"{hijau}Successfully adopted a {biru}dog")
@@ -172,7 +178,7 @@ class DejenTod:
         zawarudo = False
         while True:
             res = self.http(bar_url, self.headers)
-            if res.status_code != 200:
+            if res is None or res.status_code != 200:
                 self.log(f"{merah}Failed to fetch bar information!")
                 return
 
@@ -193,7 +199,7 @@ class DejenTod:
                 if click > avail:
                     click = avail
                 res = self.http(f"{click_url}{click}", self.headers, "")
-                if res.status_code != 200:
+                if res is None or res.status_code != 200:
                     self.log(f"{merah}HTTP error occurred while sending click!")
                     continue
 
@@ -207,61 +213,87 @@ class DejenTod:
                     time.sleep(1)
                     
                 if click_successful:
-                    if avail <= 0:
-                        break
-                    self.countdown(self.interval_click)
-                else:
-                    self.log(f"{merah}Click operation failed repeatedly. Skipping account...")
-                    return
+                    break
+                self.countdown(self.interval_click)
+
+            if not click_successful:
+                self.log(f"{merah}Click operation failed repeatedly. Skipping account...")
+                return
 
             if self.auto_upgrade:
                 upgrade_attempts = 0
-                while upgrade_attempts < 5:  # Limit the number of upgrade attempts
+                while upgrade_attempts < 5:
                     res = self.http(boxmall_url, self.headers)
+                    if res is None or res.status_code != 200:
+                        self.log(f"{merah}Failed to fetch box mall information!")
+                        upgrade_attempts += 1
+                        time.sleep(5)
+                        continue
+
                     data = res.json().get("data", {})
                     gold = data.get("goldAmount", 0)
                     price_levelup = data.get("levelUpAmount", 0)
                     self.log(f"{hijau}Total gold : {putih}{gold}")
                     self.log(f"{biru}Upgrade price : {putih}{price_levelup}")
+
                     if gold > price_levelup:
                         res = self.http(levelup_url, self.headers, "")
+                        if res is None or res.status_code != 200:
+                            self.log(f"{merah}Failed to level up!")
+                            upgrade_attempts += 1
+                            time.sleep(5)
+                            continue
+
                         retcode = res.json().get("returnCode")
                         if retcode == 200:
                             self.log(f"{biru}Level up {hijau}successfully")
-                            upgrade_attempts = 0  # Reset attempts after a successful upgrade
+                            upgrade_attempts = 0
                         else:
                             self.log(f"{merah}Level up failure, retrying...")
                             upgrade_attempts += 1
-                            time.sleep(1)
-                        continue
-                    self.log(f"{kuning}Gold not enough to level up!")
-                    break
+                            time.sleep(5)
+                    else:
+                        self.log(f"{kuning}Gold not enough to level up!")
+                        break
             else:
                 self.log(f"{putih}Auto upgrade disabled")
 
             if self.auto_buy_box:
                 buy_box_attempts = 0
-                while buy_box_attempts < 5:  # Limit the number of buy box attempts
+                while buy_box_attempts < 5:
                     res = self.http(boxmall_url, self.headers)
+                    if res is None or res.status_code != 200:
+                        self.log(f"{merah}Failed to fetch box mall information!")
+                        buy_box_attempts += 1
+                        time.sleep(5)
+                        continue
+
                     data = res.json().get("data", {})
                     gold = data.get("goldAmount", 0)
                     box_price = data.get("boxPrice", 0)
                     self.log(f"{hijau}Total gold : {putih}{gold}")
                     self.log(f"{biru}Box price : {putih}{box_price}")
+
                     if gold > box_price:
                         res = self.http(buybox_url, self.headers, "")
+                        if res is None or res.status_code != 200:
+                            self.log(f"{merah}Failed to buy box!")
+                            buy_box_attempts += 1
+                            time.sleep(5)
+                            continue
+
                         retcode = res.json().get("returnCode")
                         if retcode == 200:
                             self.log(f"{biru}Buy box {hijau}successfully!")
-                            buy_box_attempts = 0  # Reset attempts after a successful purchase
+                            buy_box_attempts = 0
                         else:
                             desc = res.json().get("returnDesc", "Unknown error")
                             self.log(f"{merah}{desc}")
                             buy_box_attempts += 1
-                            time.sleep(1)
-                        continue
-                    self.log(f"{kuning}Gold not enough to buy box!")
-                    break
+                            time.sleep(5)
+                    else:
+                        self.log(f"{kuning}Gold not enough to buy box!")
+                        break
             else:
                 self.log(f"{putih}Auto buy box disabled")
 
@@ -323,7 +355,6 @@ class DejenTod:
                 self.account()
                 print(line)
             self.countdown(self.var_countdown)
-
 
 if __name__ == "__main__":
     try:
