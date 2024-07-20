@@ -296,7 +296,7 @@ class DejenTod:
             sys.exit()
 
         if len(datas) == 0:
-            self.log(f"{merah}No account detected, add account to `data.txt` first!")
+            self.log(f"{merah}No account detected, add account to data.txt first!")
             sys.exit()
 
         self.log(f"{hijau}Total accounts : {putih}{len(datas)}")
