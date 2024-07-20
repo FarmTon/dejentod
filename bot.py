@@ -20,7 +20,6 @@ hitam = Fore.LIGHTBLACK_EX
 reset = Style.RESET_ALL
 line = putih + "~" * 50
 
-
 class DejenTod:
     def __init__(self):
         self.headers = {
