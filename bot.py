@@ -1,390 +1,331 @@
 import os
 import sys
-import json
-import uuid
 import time
+import json
+import random
 import argparse
 import requests
-from colorama import *
+from colorama import Fore, Style
 from datetime import datetime
-from urllib.parse import unquote, quote, parse_qs
-from base64 import b64decode
-
-init(autoreset=True)
+from urllib.parse import parse_qs
+from base64 import urlsafe_b64decode
 
 merah = Fore.LIGHTRED_EX
-putih = Fore.LIGHTWHITE_EX
-hijau = Fore.LIGHTGREEN_EX
 kuning = Fore.LIGHTYELLOW_EX
+hijau = Fore.LIGHTGREEN_EX
 biru = Fore.LIGHTBLUE_EX
-reset = Style.RESET_ALL
+putih = Fore.LIGHTWHITE_EX
 hitam = Fore.LIGHTBLACK_EX
+reset = Style.RESET_ALL
+line = putih + "~" * 50
 
-class Gamee:
+
+class DejenTod:
     def __init__(self):
-        self.peer = "gamee"
-        self.url_api_gamee = "https://api.gamee.com/"
-        self.ref = "ref_629438076"
-        self.DEFAULT_COUNTDOWN = 2 * (60 * 60)
-        self.DEFAULT_INTERVAL = 10
-        self.line = putih + "~" * 50
+        self.headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en,en-US;q=0.9",
+            "Connection": "keep-alive",
+            "Host": "api.djdog.io",
+            "Origin": "https://djdog.io",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Redmi 4A / 5A Build/QQ3A.200805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.185 Mobile Safari/537.36",
+            "X-Requested-With": "tw.nekomimi.nekogram",
+        }
+        self.marin_kitagawa = lambda data: {
+            key: value[0] for key, value in parse_qs(data).items()
+        }
 
-    def http(self, url, headers: dict, data=None):
+    def http(self, url, headers, data=None):
         while True:
             try:
+                now = datetime.now().isoformat(" ").split(".")[0]
                 if data is None:
-                    headers["content-length"] = "0"
                     res = requests.get(url, headers=headers)
-                    open("http.log", "a", encoding="utf-8").write(res.text + "\n")
-                    if "<title>" in res.text:
-                        time.sleep(1)
-                        self.log(f"{kuning}failed get json response !")
-                        continue
-                    return res
-
-                res = requests.post(url, headers=headers, data=data)
-                open("http.log", "a", encoding="utf-8").write(res.text + "\n")
-                if "<title>" in res.text:
-                    time.sleep(1)
-                    self.log(f"{kuning}failed get json response !")
-                    continue
+                elif data == "":
+                    res = requests.post(url, headers=headers)
+                else:
+                    res = requests.post(url, headers=headers, data=data)
+                with open("http.log", "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{now} - {res.status_code} {res.text}\n")
                 return res
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-                requests.exceptions.ReadTimeout,
-            ):
-                self.log(f"{merah}connection error !")
-
-    def log(self, message):
-        now = datetime.now().isoformat(" ").split(".")[0]
-        print(f"{hitam}[{now}] {message}")
-
-    def countdown(self, t):
-        while t:
-            menit, detik = divmod(t, 60)
-            jam, menit = divmod(menit, 60)
-            jam = str(jam).zfill(2)
-            menit = str(menit).zfill(2)
-            detik = str(detik).zfill(2)
-            print(f"waiting until {jam}:{menit}:{detik} ", flush=True, end="\r")
-            t -= 1
-            time.sleep(1)
-        print("                          ", flush=True, end="\r")
-
-    def cv(self, data):
-        return data / 1000000
-
-    def load_config(self, config_file="config.json"):
-        try:
-            config = json.loads(open(config_file, "r").read())
-            self.DEFAULT_COUNTDOWN = config["countdown"]
-            self.DEFAULT_INTERVAL = config["interval"]
-            self.USE_TICKET_TO_SPIN = config["use_ticket_to_spin"]
-            self.MAX_USE_TICKET = config["max_use_ticket_to_spin"]
-        except json.decoder.JSONDecodeError:
-            self.log(f"{merah}failed to get you config, please check {config_file}")
-            sys.exit()
-
-    def gamee_login(self, tg_data, uuid):
-        data = {
-            "jsonrpc": "2.0",
-            "id": "user.authentication.loginUsingTelegram",
-            "method": "user.authentication.loginUsingTelegram",
-            "params": {"initData": tg_data},
-        }
-        headers = {
-            "Host": "api.gamee.com",
-            "Origin": "https://prizes.gamee.com",
-            "Referer": "https://prizes.gamee.com/",
-            "content-type": "text/plain;charset=UTF-8",
-            "content-length": str(len(json.dumps(data))),
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Redmi 4A / 5A Build/QQ3A.200805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.185 Mobile Safari/537.36",
-            "x-install-uuid": uuid,
-            "X-Requested-With": "org.telegram.messenger",
-        }
-        while True:
-            res = self.http(self.url_api_gamee, headers, json.dumps(data))
-            if "result" not in res.json().keys():
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                self.log(f"{merah}connection error / connection timeout! Exception: {e}")
+                time.sleep(1)
+                continue
+            except Exception as e:
+                self.log(f"{merah}An unexpected error occurred: {e}")
+                time.sleep(1)
                 continue
 
-            access_token = res.json()["result"]["tokens"]["authenticate"]
-            tokens = json.loads(open("tokens.json", "r").read())
-            tokens[uuid] = access_token
-            open("tokens.json", "w").write(json.dumps(tokens, indent=4))
-            return access_token
+    def log(self, msg):
+        now = datetime.now().isoformat(" ").split(".")[0]
+        print(f"{hitam}[{now}] {msg}{reset}")
 
-    def gamee_spin(self, access_token, uuid):
-        headers = {
-            "authorization": f"Bearer {access_token}",
-            "Host": "api.gamee.com",
-            "Origin": "https://prizes.gamee.com",
-            "Referer": "https://prizes.gamee.com/",
-            "content-type": "text/plain;charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Redmi 4A / 5A Build/QQ3A.200805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.185 Mobile Safari/537.36",
-            "x-install-uuid": uuid,
-            "X-Requested-With": "org.telegram.messenger",
-        }
-        daily_get_price = json.dumps({
-            "jsonrpc": "2.0",
-            "id": "dailyReward.getPrizes",
-            "method": "dailyReward.getPrizes",
-            "params": {},
-        })
-        daily_reward_claim_prize = json.dumps({
-            "jsonrpc": "2.0",
-            "id": "dailyReward.claimPrize",
-            "method": "dailyReward.claimPrize",
-            "params": {},
-        })
-        buy_spin_using_ticket = json.dumps({
-            "jsonrpc": "2.0",
-            "id": "dailyReward.buySpinUsingTickets",
-            "method": "dailyReward.buySpinUsingTickets",
-            "params": {},
-        })
+    def countdown(self, t):
+        for i in range(t, 0, -1):
+            menit, detik = divmod(i, 60)
+            jam, menit = divmod(menit, 60)
+            detik = str(detik).zfill(2)
+            menit = str(menit).zfill(2)
+            jam = str(jam).zfill(2)
+            print(f"{putih}waiting {jam}:{menit}:{detik} ", flush=True, end="\r")
+            time.sleep(1)
+
+    def set_authorization(self, auth):
+        self.headers["Authorization"] = auth
+
+    def remove_authorization(self):
+        if "Authorization" in self.headers:
+            self.headers.pop("Authorization")
+
+    def get_token(self, id):
+        try:
+            with open("tokens.json") as f:
+                tokens = json.load(f)
+            return tokens.get(str(id))
+        except Exception as e:
+            self.log(f"{merah}Failed to read tokens: {e}")
+            return None
+
+    def save_token(self, id, token):
+        try:
+            with open("tokens.json") as f:
+                tokens = json.load(f)
+            tokens[str(id)] = token
+            with open("tokens.json", "w") as f:
+                json.dump(tokens, f, indent=4)
+        except Exception as e:
+            self.log(f"{merah}Failed to save token: {e}")
+
+    def is_expired(self, token):
+        try:
+            token = token.split(" ")[1]
+            header, payload, sign = token.split(".")
+            deload = urlsafe_b64decode(payload + "==").decode()
+            jeload = json.loads(deload)
+            now = datetime.now().timestamp()
+            if now > jeload["exp"]:
+                self.log(f"{merah}token is expired!")
+                return True
+            return False
+        except Exception as e:
+            self.log(f"{merah}Failed to check token expiration: {e}")
+            return True
+
+    def login(self, data):
+        url = "https://api.djdog.io/telegram/login?" + data
+        self.remove_authorization()
+        res = self.http(url, self.headers)
+        if res.status_code != 200:
+            self.log(f"{merah}failed to fetch token, check http.log!")
+            return None
+        try:
+            token = res.json()["data"]["accessToken"]
+            self.log(f"{hijau}successfully got token!")
+            return token
+        except Exception as e:
+            self.log(f"{merah}Failed to parse token: {e}")
+            return None
+
+    def load_config(self, file):
+        try:
+            with open(file) as f:
+                config = json.load(f)
+            self.click_min = config["random_click"]["min"]
+            self.click_max = config["random_click"]["max"]
+            self.interval_click = config["interval_click"]
+            self.auto_upgrade = config["auto_upgrade"]
+            self.auto_buy_box = config["auto_buy_box"]
+            self.var_countdown = config["countdown"]
+        except Exception as e:
+            self.log(f"{merah}Failed to load configuration: {e}")
+            sys.exit()
+
+    def account(self):
+        info_url = "https://api.djdog.io/pet/information"
+        adop_url = "https://api.djdog.io/pet/adopt"
+        bar_url = "https://api.djdog.io/pet/barAmount"
+        click_url = "https://api.djdog.io/pet/collect?clicks="
+        boxmall_url = "https://api.djdog.io/pet/boxMall"
+        levelup_url = "https://api.djdog.io/pet/levelUp/0"
+        buybox_url = "https://api.djdog.io/pet/exchangeBox/0"
 
         while True:
-            try:
-                res = self.http(self.url_api_gamee, headers, daily_get_price)
-                daily_spin = res.json()["result"]["dailyReward"]["spinsCountAvailable"]
-                spin_using_ticket_price = res.json()["result"]["dailyReward"]["dailyRewardBonusSpinsPriceTickets"]
-                tickets = res.json()["user"]["tickets"]["count"]
+            res = self.http(info_url, self.headers)
+            if res.status_code != 200:
+                self.log(f"{merah}failed to get account information!")
+                return False
 
-                self.log(f"{hijau}available ticket : {putih}{tickets}")
-                self.log(f"{hijau}available free spin : {putih}{daily_spin}")
-                self.log(f"{hijau}price to spin : {putih}{spin_using_ticket_price} {hijau}ticket")
+            adopted = res.json()["data"]["adopted"]
+            if not adopted:
+                res = self.http(adop_url, self.headers, "")
+                if res.status_code != 200:
+                    self.log(f"{merah}failed to adopt dog!")
+                    return False
+                self.log(f"{hijau}successfully adopted a {biru}dog")
+                continue
 
-                # Handle free spins
-                if daily_spin > 0:
-                    for i in range(daily_spin):
-                        res = self.http(self.url_api_gamee, headers, daily_reward_claim_prize)
-                        reward_type = res.json()["result"]["reward"]["type"]
-                        key = "usdCents" if reward_type == "money" else reward_type
-                        reward = res.json()["result"]["reward"][key]
-                        self.log(f"{hijau}reward spin : {putih}{reward} {reward_type}")
+            break
 
-                # Handle ticket-based spins
-                if self.USE_TICKET_TO_SPIN:
-                    self.log(f"{biru}start spin using ticket !")
-                    while True:
-                        if tickets < spin_using_ticket_price:
-                            self.log(f"{kuning}not enough tickets for spin !")
-                            break
-
-                        if spin_using_ticket_price > self.MAX_USE_TICKET:
-                            self.log(f"{kuning}max using ticket to spin reached !")
-                            break
-
-                        res = self.http(self.url_api_gamee, headers, buy_spin_using_ticket)
-                        if "error" in res.json().keys():
-                            msg = res.json()["error"].get("message", "").lower()
-                            if msg == "not enough tickets":
-                                self.log(f"{kuning}not enough tickets for spin !")
-                            elif msg == "too many requests":
-                                self.log(f"{kuning}too many requests, skipping spin !")
-                            else:
-                                self.log(f"{merah}unexpected error: {msg}")
-                            break  # Skip to the next account on failure
-
-                        res = self.http(self.url_api_gamee, headers, daily_reward_claim_prize)
-                        reward_type = res.json()["result"]["reward"]["type"]
-                        key = "usdCents" if reward_type == "money" else reward_type
-                        reward = res.json()["result"]["reward"][key]
-                        self.log(f"{hijau}reward spin : {putih}{reward} {reward_type}")
-
-                        # Recheck the spin and ticket details
-                        res = self.http(self.url_api_gamee, headers, daily_get_price)
-                        daily_spin = res.json()["result"]["dailyReward"]["spinsCountAvailable"]
-                        spin_using_ticket_price = res.json()["result"]["dailyReward"]["dailyRewardBonusSpinsPriceTickets"]
-                        tickets = res.json()["user"]["tickets"]["count"]
-
-                        self.log(f"{hijau}available ticket : {putih}{tickets}")
-                        self.log(f"{hijau}available free spin : {putih}{daily_spin}")
-                        self.log(f"{hijau}price to spin : {putih}{spin_using_ticket_price} {hijau}ticket")
-
-                        if daily_spin <= 0 and tickets < spin_using_ticket_price:
-                            self.log(f"{kuning}no more spins available and not enough tickets, skipping spin !")
-                            break
-
-                        if tickets < spin_using_ticket_price:
-                            self.log(f"{kuning}not enough tickets for spin !")
-                            break
-
-                        time.sleep(10)  # Delay to avoid rapid API calls
-
+        zawarudo = False
+        while True:
+            res = self.http(bar_url, self.headers)
+            if res.status_code != 200:
+                self.log(f"{merah}failed to fetch bar information!")
                 return
 
-            except KeyError as e:
-                self.log(f"{merah}KeyError: {e}")
-                break  # Skip to the next account on failure
+            data = res.json().get("data", {})
+            avail = data.get("availableAmount", 0)
+            gold = data.get("goldAmount", 0)
+            level = data.get("level", 0)
+            self.log(f"{putih}level : {hijau}{level}")
+            self.log(f"{hijau}available energy : {putih}{avail}")
+            self.log(f"{hijau}total gold : {putih}{gold}")
 
-            except Exception as e:
-                self.log(f"{merah}Unexpected error: {e}")
-                break  # Skip to the next account on failure
+            if zawarudo:
+                return
 
-    def gamee_mining_page(self, access_token, uuid):
-        headers = {
-            "authorization": f"Bearer {access_token}",
-            "Host": "api.gamee.com",
-            "Origin": "https://prizes.gamee.com",
-            "Referer": "https://prizes.gamee.com/",
-            "content-type": "text/plain;charset=UTF-8",
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Redmi 4A / 5A Build/QQ3A.200805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/86.0.4240.185 Mobile Safari/537.36",
-            "x-install-uuid": uuid,
-            "X-Requested-With": "org.telegram.messenger",
-        }
-        data = {
-            "jsonrpc": "2.0",
-            "id": "miningEvent.get",
-            "method": "miningEvent.get",
-            "params": {
-                "miningEventId": 12,
-            },
-        }
-        data_start_mining = {
-            "jsonrpc": "2.0",
-            "id": "miningEvent.startSession",
-            "method": "miningEvent.startSession",
-            "params": {"miningEventId": 12, "code": "WATPROTOCOL"},
-        }
-        res = self.http(self.url_api_gamee, headers, json.dumps(data))
-        assets = res.json()["user"]["assets"]
-        for asset in assets:
-            cur = asset["currency"]["ticker"]
-            amount = asset["amountMicroToken"] / 1000000
-            self.log(f"{putih}balance : {hijau}{amount} {putih}{cur}")
-        mining = res.json()["result"]["miningEvent"]["miningUser"]
-        if mining is None:
-            self.log(f"{kuning}mining not started !")
-            headers["content-length"] = str(len(json.dumps(data_start_mining)))
-            while True:
-                res = self.http(
-                    self.url_api_gamee, headers, json.dumps(data_start_mining)
-                )
-                if "error" in res.json().keys():
-                    time.sleep(2)
+            click_successful = False
+            while avail > 0:
+                click = random.randint(self.click_min, self.click_max)
+                if click > avail:
+                    click = avail
+                res = self.http(f"{click_url}{click}", self.headers, "")
+                if res.status_code != 200:
+                    self.log(f"{merah}HTTP error occurred while sending click!")
                     continue
 
-                if "miningEvent" in res.json()["result"]:
-                    self.log(f"{hijau}mining start successfully !")
+                retcode = res.json().get("returnCode")
+                if retcode == 200:
+                    avail -= click
+                    self.log(f"{hijau}successfully sent {putih}{click} {hijau}click{biru},{hijau}energy : {putih}{avail}")
+                    click_successful = True
+                else:
+                    self.log(f"{merah}failed to send click, retrying...")
+                    time.sleep(1)
+                    
+                if click_successful:
+                    if avail <= 0:
+                        break
+                    self.countdown(self.interval_click)
+                else:
+                    self.log(f"{merah}Click operation failed repeatedly. Skipping account...")
                     return
 
-        end = mining["miningSessionEnded"]
-        earn = self.cv(mining["currentSessionMicroToken"])
-        mine = self.cv(mining["currentSessionMicroTokenMined"])
-        self.log(f"{putih}max mining : {hijau}{earn}")
-        self.log(f"{putih}current mining : {hijau}{mine}")
-        if end:
-            self.log(f"{kuning}mining has ended !")
-            headers["content-length"] = str(len(json.dumps(data_start_mining)))
-            while True:
-                res = self.http(
-                    self.url_api_gamee, headers, json.dumps(data_start_mining)
-                )
-                if "error" in res.json().keys():
-                    msg = res.json()["error"]["message"].lower()
-                    if msg == "mining session in progress.":
-                        self.log(f"{kuning}mining in progress")
-                        return
-                    time.sleep(2)
-                    continue
+            if self.auto_upgrade:
+                while True:
+                    res = self.http(boxmall_url, self.headers)
+                    data = res.json().get("data", {})
+                    gold = data.get("goldAmount", 0)
+                    price_levelup = data.get("levelUpAmount", 0)
+                    self.log(f"{hijau}total gold : {putih}{gold}")
+                    self.log(f"{biru}upgrade price : {putih}{price_levelup}")
+                    if gold > price_levelup:
+                        while True:
+                            res = self.http(levelup_url, self.headers, "")
+                            retcode = res.json().get("returnCode")
+                            if retcode == 200:
+                                self.log(f"{biru}level up {hijau}successfully")
+                                break
+                            else:
+                                self.log(f"{merah}level up failure, retrying...")
+                                time.sleep(1)
+                        continue
+                    self.log(f"{kuning}gold not enough to level up!")
+                    break
 
-                if "miningEvent" in res.json()["result"]:
-                    self.log(f"{hijau}mining start successfully !")
-                    return
-
-        self.log(f"{kuning}mining is not over !")
-        return
-
-    def data_parsing(self, data):
-        return {k: v[0] for k, v in parse_qs(data).items()}
-
-    def token_checker(self, token):
-        header, payload, sign = token.split(".")
-        depayload = b64decode(payload + "==")
-        jeload = json.loads(depayload)
-        expired = jeload["exp"]
-        now = int(datetime.now().timestamp())
-        if now > int(expired):
-            return True
-        return False
+            if self.auto_buy_box:
+                while True:
+                    res = self.http(boxmall_url, self.headers)
+                    data = res.json().get("data", {})
+                    gold = data.get("goldAmount", 0)
+                    box_price = data.get("boxPrice", 0)
+                    self.log(f"{hijau}total gold : {putih}{gold}")
+                    self.log(f"{biru}box price : {putih}{box_price}")
+                    if gold > box_price:
+                        while True:
+                            res = self.http(buybox_url, self.headers, "")
+                            retcode = res.json().get("returnCode")
+                            if retcode == 200:
+                                self.log(f"{biru}buy box {hijau}successfully!")
+                                break
+                            else:
+                                desc = res.json().get("returnDesc", "Unknown error")
+                                self.log(f"{merah}{desc}")
+                                time.sleep(1)
+                        continue
+                    self.log(f"{kuning}gold not enough to buy box!")
+                    break
+            zawarudo = True
 
     def main(self):
         banner = f"""
-    {hijau}Auto Claim {kuning}WAT Points {hijau}from {biru}Gamee
+    {hijau}Auto click for {biru}dejendogbot {hijau}Telegram
     
-    {putih}By : {hijau}t.me/AkasakaID
-    {hijau}Github : {putih}@AkasakaID
-    
+    {biru}By: {hijau}t.me/AkasakaID
+    {biru}Github: {hijau}@AkasakaID
+        
         """
         arg = argparse.ArgumentParser()
         arg.add_argument("--marinkitagawa", action="store_true")
-        arg.add_argument(
-            "--data",
-            help="set custom file input data (default: data.txt)",
-            default="data.txt",
-        )
-        arg.add_argument(
-            "--config",
-            help="set custom config (default: config.json)",
-            default="config.json",
-        )
+        arg.add_argument("--data", default="data.txt")
+        arg.add_argument("--config", default="config.json")
         args = arg.parse_args()
-        if args.marinkitagawa is False:
+        if not args.marinkitagawa:
             os.system("cls" if os.name == "nt" else "clear")
-
         print(banner)
-
-        if not os.path.exists(args.data):
-            self.log(
-                f"{merah} {args.data} is not found, input valid path file please !"
-            )
+        if not os.path.exists("tokens.json"):
+            with open("tokens.json", "w") as f:
+                json.dump({}, f)
+        self.load_config(args.config)
+        try:
+            with open(args.data) as f:
+                datas = f.read().splitlines()
+        except Exception as e:
+            self.log(f"{merah}Failed to read data file: {e}")
             sys.exit()
 
-        self.load_config(args.config)
+        if len(datas) == 0:
+            self.log(f"{merah}no account detected, add account to `data.txt` first!")
+            sys.exit()
+
+        self.log(f"{hijau}total accounts : {putih}{len(datas)}")
+        print(line)
+
         while True:
-            accounts = open(args.data, "r").read().splitlines()
-            self.log(f"{hijau}account detected : {putih}{len(accounts)}")
-            if len(accounts) <= 0:
-                self.log(f"{merah}please add data account in {args.data}")
-                sys.exit()
-
-            print(self.line)
-            for account in accounts:
-                access_token = None
-                data_parse = self.data_parsing(account)
-                user = json.loads(data_parse["user"])
+            for no, data in enumerate(datas):
+                self.log(f"{hijau}account number : {putih}{no + 1}{hijau}/{putih}{len(datas)}")
+                parser = self.marin_kitagawa(data)
+                user = json.loads(parser["user"])
                 userid = user["id"]
-                first_name = user["first_name"]
-                self.log(f"{hijau}login as {putih}{first_name}")
-                data = f"query_id={data_parse['query_id']}&user={quote(data_parse['user'])}&auth_date={data_parse['auth_date']}&hash={data_parse['hash']}"
-                uids = json.loads(open("uuid.json", "r").read())
-                if str(userid) not in uids.keys():
-                    uid = uuid.uuid4().__str__()
-                    uids[str(userid)] = uid
-                    open("uuid.json", "w").write(json.dumps(uids, indent=4))
-                else:
-                    uid = uids[str(userid)]
-                tokens = json.loads(open("tokens.json", "r").read())
-                if uid not in tokens.keys():
-                    access_token = self.gamee_login(data, uid)
-                else:
-                    access_token = tokens[uid]
-                is_expired = self.token_checker(access_token)
-                if is_expired:
-                    access_token = self.gamee_login(data, uid)
+                token = self.get_token(userid)
+                if token is None:
+                    token = self.login(data)
+                    if token is None:
+                        continue
+                    self.save_token(userid, token)
+                if self.is_expired(token):
+                    token = self.login(data)
+                    if token is None:
+                        continue
+                    self.save_token(userid, token)
 
-                self.gamee_spin(access_token, uid)
-                self.gamee_mining_page(access_token, uid)
-                print(self.line)
-                self.countdown(self.DEFAULT_INTERVAL)
+                self.set_authorization(token)
+                self.account()
+                print(line)
+            self.countdown(self.var_countdown)
 
-            self.countdown(self.DEFAULT_COUNTDOWN)
 
 if __name__ == "__main__":
     try:
-        app = Gamee()
+        app = DejenTod()
         app.main()
     except KeyboardInterrupt:
         sys.exit()
+    except Exception as e:
+        print(f"Unhandled exception: {e}")
+        sys.exit(1)
